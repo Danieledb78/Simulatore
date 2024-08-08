@@ -1,1 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulatore Rata Impianti Fotovoltaici</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="configuratore">
+        <h1>Simulatore Rata Impianti Fotovoltaici</h1>
+        <form id="configuratore-form">
+            <label for="tipoSistema">Tipo di Sistema:</label>
+            <select id="tipoSistema" name="tipoSistema" required>
+                <option value="tradizionale">Tradizionale</option>
+                <option value="accumulo">Con Accumulo</option>
+            </select>
 
+            <label for="tagliaImpianto">Taglia Impianto Fotovoltaico (kWp):</label>
+            <select id="tagliaImpianto" name="tagliaImpianto" required>
+                <option value="3">3,00 kWp</option>
+                <option value="4.5">4,5 kWp</option>
+                <option value="6">6 kWp</option>
+                <option value="12">12 kWp</option>
+                <option value="20">20 kWp</option>
+            </select>
+
+            <div id="accumuloOptions" style="display: none;">
+                <label for="tagliaAccumulo">Taglia Accumulo (kWh):</label>
+                <select id="tagliaAccumulo" name="tagliaAccumulo">
+                    <option value="5.8">5,80 kWh</option>
+                    <option value="10">10 kWh</option>
+                    <option value="15">15 kWh</option>
+                    <option value="30">30 kWh</option>
+                </select>
+            </div>
+
+            <label for="durataFinanziamento">Durata del Finanziamento (anni):</label>
+            <input type="number" id="durataFinanziamento" name="durataFinanziamento" min="1" max="30" required>
+
+            <h3>Opzioni Aggiuntive</h3>
+            <input type="checkbox" id="integrazione" name="integrazione" value="2400">
+            <label for="integrazione">Impianto ad Integrazione Architettonica (€ 2400)</label><br>
+
+            <input type="checkbox" id="pulizia" name="pulizia" value="500">
+            <label for="pulizia">Pulizia e Monitoraggio (€ 500)</label><br>
+
+            <input type="checkbox" id="lineaVita" name="lineaVita" value="2000">
+            <label for="lineaVita">Linea Vita (€ 2000)</label><br>
+            
+            <button type="submit">Calcola</button>
+        </form>
+        <div id="risultato"></div>
+        <button id="downloadPDF" style="display: none;">Scarica Riepilogo PDF</button>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.0/jspdf.umd.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
