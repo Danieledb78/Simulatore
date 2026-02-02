@@ -1,0 +1,37 @@
+{
+  "name": "beverage-warehouse-app",
+  "version": "1.0.0",
+  "description": "App per la gestione di un magazzino di bevande con integrazione WhatsApp, pagamenti Stripe e gestione driver",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "backend:dev": "npm run dev --workspace=@beverage-app/backend",
+    "backend:build": "npm run build --workspace=@beverage-app/backend",
+    "backend:start": "npm run start --workspace=@beverage-app/backend",
+    "web:dev": "npm run dev --workspace=@beverage-app/web",
+    "web:build": "npm run build --workspace=@beverage-app/web",
+    "mobile:start": "npm run start --workspace=@beverage-app/mobile",
+    "mobile:android": "npm run android --workspace=@beverage-app/mobile",
+    "mobile:ios": "npm run ios --workspace=@beverage-app/mobile",
+    "db:migrate": "npm run migrate --workspace=@beverage-app/backend",
+    "db:seed": "npm run seed --workspace=@beverage-app/backend",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces"
+  },
+  "keywords": [
+    "warehouse",
+    "beverage",
+    "inventory",
+    "whatsapp",
+    "stripe",
+    "delivery"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

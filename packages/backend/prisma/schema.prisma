@@ -1,0 +1,659 @@
+// Schema database per Gestione Magazzino Bevande
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== UTENTI E AUTENTICAZIONE ====================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  phone         String?
+  role          UserRole  @default(ADMIN)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  driver        Driver?
+  notifications Notification[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  WAREHOUSE_MANAGER
+  DRIVER
+}
+
+// ==================== PRODOTTI E MAGAZZINO ====================
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  imageUrl    String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id              String    @id @default(uuid())
+  barcode         String    @unique
+  name            String
+  description     String?
+  categoryId      String
+  brand           String?
+  unit            ProductUnit @default(PIECE)
+  unitSize        String?     // es: "1L", "500ml", "6x330ml"
+  purchasePrice   Decimal   @db.Decimal(10, 2)
+  sellingPrice    Decimal   @db.Decimal(10, 2)
+  vatRate         Decimal   @db.Decimal(5, 2) @default(22.00)
+  minStockLevel   Int       @default(10)
+  imageUrl        String?
+  isActive        Boolean   @default(true)
+  expirationDays  Int?      // Giorni prima della scadenza per alert
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  category        Category  @relation(fields: [categoryId], references: [id])
+  stockMovements  StockMovement[]
+  orderItems      OrderItem[]
+  priceListItems  PriceListItem[]
+  inventory       Inventory?
+
+  @@index([barcode])
+  @@index([categoryId])
+  @@map("products")
+}
+
+enum ProductUnit {
+  PIECE       // Singolo pezzo
+  PACK        // Confezione
+  CASE        // Cassa
+  PALLET      // Pallet
+}
+
+model Inventory {
+  id              String    @id @default(uuid())
+  productId       String    @unique
+  quantity        Int       @default(0)
+  reservedQty     Int       @default(0) // Quantità riservata per ordini
+  availableQty    Int       @default(0) // quantity - reservedQty
+  lastRestockDate DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  product         Product   @relation(fields: [productId], references: [id])
+
+  @@map("inventory")
+}
+
+model StockMovement {
+  id            String          @id @default(uuid())
+  productId     String
+  type          MovementType
+  quantity      Int
+  previousQty   Int
+  newQty        Int
+  batchNumber   String?
+  expirationDate DateTime?
+  notes         String?
+  supplierId    String?
+  orderId       String?
+  createdBy     String
+  createdAt     DateTime        @default(now())
+
+  product       Product         @relation(fields: [productId], references: [id])
+  supplier      Supplier?       @relation(fields: [supplierId], references: [id])
+  order         Order?          @relation(fields: [orderId], references: [id])
+
+  @@index([productId])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+enum MovementType {
+  INBOUND       // Carico merce
+  OUTBOUND      // Scarico per ordine
+  ADJUSTMENT    // Rettifica inventario
+  RETURN        // Reso
+  DAMAGE        // Danneggiamento
+  EXPIRED       // Scaduto
+}
+
+model Supplier {
+  id            String    @id @default(uuid())
+  name          String
+  email         String?
+  phone         String?
+  address       String?
+  city          String?
+  province      String?
+  postalCode    String?
+  vatNumber     String?
+  notes         String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  stockMovements StockMovement[]
+
+  @@map("suppliers")
+}
+
+// ==================== CLIENTI ====================
+
+model Customer {
+  id              String    @id @default(uuid())
+  type            CustomerType @default(PRIVATE)
+  companyName     String?
+  firstName       String
+  lastName        String
+  email           String?   @unique
+  phone           String    @unique
+  whatsappId      String?   @unique // ID WhatsApp Business
+  address         String?
+  city            String?
+  province        String?
+  postalCode      String?
+  zoneId          String?
+  vatNumber       String?   // P.IVA
+  fiscalCode      String?   // Codice Fiscale
+  sdiCode         String?   // Codice SDI per fatturazione elettronica
+  pecEmail        String?   // PEC per fatturazione
+  priceListId     String?
+  creditLimit     Decimal?  @db.Decimal(10, 2)
+  currentBalance  Decimal   @db.Decimal(10, 2) @default(0)
+  paymentTerms    PaymentTerms @default(IMMEDIATE)
+  notes           String?
+  isActive        Boolean   @default(true)
+  isVerified      Boolean   @default(false) // Verificato via WhatsApp
+  stripeCustomerId String?  @unique
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  zone            Zone?     @relation(fields: [zoneId], references: [id])
+  priceList       PriceList? @relation(fields: [priceListId], references: [id])
+  orders          Order[]
+  payments        Payment[]
+  invoices        Invoice[]
+  conversations   WhatsAppConversation[]
+
+  @@index([phone])
+  @@index([whatsappId])
+  @@index([zoneId])
+  @@map("customers")
+}
+
+enum CustomerType {
+  PRIVATE     // Privato
+  BAR         // Bar
+  RESTAURANT  // Ristorante
+  HOTEL       // Hotel
+  SHOP        // Negozio
+  WHOLESALE   // Grossista
+}
+
+enum PaymentTerms {
+  IMMEDIATE   // Pagamento immediato
+  NET_7       // 7 giorni
+  NET_15      // 15 giorni
+  NET_30      // 30 giorni
+  NET_60      // 60 giorni
+}
+
+// ==================== LISTINI PREZZI ====================
+
+model PriceList {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  discountPct Decimal?  @db.Decimal(5, 2) // Sconto % generale
+  isDefault   Boolean   @default(false)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items       PriceListItem[]
+  customers   Customer[]
+
+  @@map("price_lists")
+}
+
+model PriceListItem {
+  id          String    @id @default(uuid())
+  priceListId String
+  productId   String
+  price       Decimal   @db.Decimal(10, 2)
+  discountPct Decimal?  @db.Decimal(5, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  priceList   PriceList @relation(fields: [priceListId], references: [id])
+  product     Product   @relation(fields: [productId], references: [id])
+
+  @@unique([priceListId, productId])
+  @@map("price_list_items")
+}
+
+// ==================== ORDINI ====================
+
+model Order {
+  id              String      @id @default(uuid())
+  orderNumber     String      @unique
+  customerId      String
+  driverId        String?
+  status          OrderStatus @default(PENDING)
+  source          OrderSource @default(WEB)
+
+  // Indirizzi
+  deliveryAddress String
+  deliveryCity    String
+  deliveryProvince String?
+  deliveryPostalCode String?
+  deliveryNotes   String?
+
+  // Importi
+  subtotal        Decimal     @db.Decimal(10, 2)
+  vatAmount       Decimal     @db.Decimal(10, 2)
+  deliveryFee     Decimal     @db.Decimal(10, 2) @default(0)
+  discount        Decimal     @db.Decimal(10, 2) @default(0)
+  total           Decimal     @db.Decimal(10, 2)
+
+  // Date
+  requestedDate   DateTime?   // Data consegna richiesta
+  scheduledDate   DateTime?   // Data consegna programmata
+  deliveredAt     DateTime?
+
+  // Pagamento
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentMethod   PaymentMethod?
+  paidAmount      Decimal     @db.Decimal(10, 2) @default(0)
+
+  notes           String?
+  internalNotes   String?
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  customer        Customer    @relation(fields: [customerId], references: [id])
+  driver          Driver?     @relation(fields: [driverId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  invoice         Invoice?
+  stockMovements  StockMovement[]
+  statusHistory   OrderStatusHistory[]
+
+  @@index([customerId])
+  @@index([driverId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING           // In attesa conferma
+  CONFIRMED         // Confermato
+  PROCESSING        // In preparazione
+  READY             // Pronto per consegna
+  OUT_FOR_DELIVERY  // In consegna
+  DELIVERED         // Consegnato
+  CANCELLED         // Annullato
+  RETURNED          // Reso
+}
+
+enum OrderSource {
+  WEB         // Da sito web
+  WHATSAPP    // Da WhatsApp
+  PHONE       // Telefonico
+  DIRECT      // Diretto in sede
+}
+
+enum PaymentStatus {
+  PENDING     // In attesa
+  PARTIAL     // Parziale
+  PAID        // Pagato
+  REFUNDED    // Rimborsato
+  FAILED      // Fallito
+}
+
+enum PaymentMethod {
+  STRIPE          // Carta via Stripe
+  BANK_TRANSFER   // Bonifico
+  CASH            // Contanti
+  CREDIT          // Credito cliente
+}
+
+model OrderItem {
+  id          String    @id @default(uuid())
+  orderId     String
+  productId   String
+  quantity    Int
+  unitPrice   Decimal   @db.Decimal(10, 2)
+  vatRate     Decimal   @db.Decimal(5, 2)
+  discount    Decimal   @db.Decimal(10, 2) @default(0)
+  total       Decimal   @db.Decimal(10, 2)
+
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(uuid())
+  orderId   String
+  status    OrderStatus
+  notes     String?
+  changedBy String?
+  createdAt DateTime    @default(now())
+
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+// ==================== DRIVER E ZONE ====================
+
+model Zone {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  postalCodes String[]  // CAP coperti
+  cities      String[]  // Città coperte
+  provinces   String[]  // Province coperte
+  deliveryFee Decimal   @db.Decimal(10, 2) @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  drivers     Driver[]
+  customers   Customer[]
+
+  @@map("zones")
+}
+
+model Driver {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  zoneId        String?
+  vehicleType   String?
+  vehiclePlate  String?
+  licenseNumber String?
+  isAvailable   Boolean   @default(true)
+  currentLat    Decimal?  @db.Decimal(10, 8)
+  currentLng    Decimal?  @db.Decimal(11, 8)
+  lastLocationAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id])
+  zone          Zone?     @relation(fields: [zoneId], references: [id])
+  orders        Order[]
+  deliveries    Delivery[]
+
+  @@map("drivers")
+}
+
+model Delivery {
+  id              String    @id @default(uuid())
+  driverId        String
+  date            DateTime  @db.Date
+  status          DeliveryStatus @default(PENDING)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  totalOrders     Int       @default(0)
+  completedOrders Int       @default(0)
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  driver          Driver    @relation(fields: [driverId], references: [id])
+
+  @@unique([driverId, date])
+  @@map("deliveries")
+}
+
+enum DeliveryStatus {
+  PENDING     // Programmata
+  IN_PROGRESS // In corso
+  COMPLETED   // Completata
+  CANCELLED   // Annullata
+}
+
+// ==================== PAGAMENTI E FATTURAZIONE ====================
+
+model Payment {
+  id              String        @id @default(uuid())
+  orderId         String
+  customerId      String
+  amount          Decimal       @db.Decimal(10, 2)
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  stripePaymentId String?       @unique
+  stripeReceiptUrl String?
+  transactionRef  String?
+  notes           String?
+  paidAt          DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  order           Order         @relation(fields: [orderId], references: [id])
+  customer        Customer      @relation(fields: [customerId], references: [id])
+
+  @@index([orderId])
+  @@index([customerId])
+  @@map("payments")
+}
+
+model Invoice {
+  id              String        @id @default(uuid())
+  invoiceNumber   String        @unique
+  orderId         String        @unique
+  customerId      String
+  type            InvoiceType   @default(INVOICE)
+
+  // Dati fatturazione
+  customerName    String
+  customerAddress String
+  customerVat     String?
+  customerFiscalCode String?
+  customerSdi     String?
+  customerPec     String?
+
+  // Importi
+  subtotal        Decimal       @db.Decimal(10, 2)
+  vatAmount       Decimal       @db.Decimal(10, 2)
+  total           Decimal       @db.Decimal(10, 2)
+
+  // Stato
+  status          InvoiceStatus @default(DRAFT)
+  sdiStatus       SdiStatus?    // Stato invio SDI
+  sdiId           String?       // ID SDI
+
+  // File
+  pdfUrl          String?
+  xmlUrl          String?       // Fattura elettronica XML
+
+  issuedAt        DateTime?
+  sentAt          DateTime?     // Inviata al cliente
+  sentVia         String?       // email, whatsapp, sdi
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  order           Order         @relation(fields: [orderId], references: [id])
+  customer        Customer      @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@map("invoices")
+}
+
+enum InvoiceType {
+  INVOICE     // Fattura
+  RECEIPT     // Scontrino/Ricevuta
+  CREDIT_NOTE // Nota di credito
+}
+
+enum InvoiceStatus {
+  DRAFT       // Bozza
+  ISSUED      // Emessa
+  SENT        // Inviata
+  PAID        // Pagata
+  CANCELLED   // Annullata
+}
+
+enum SdiStatus {
+  PENDING     // In attesa invio
+  SENT        // Inviata
+  DELIVERED   // Consegnata
+  ACCEPTED    // Accettata
+  REJECTED    // Rifiutata
+  ERROR       // Errore
+}
+
+// ==================== WHATSAPP ====================
+
+model WhatsAppConversation {
+  id            String    @id @default(uuid())
+  customerId    String?
+  phoneNumber   String
+  whatsappId    String    @unique
+  status        ConversationStatus @default(ACTIVE)
+  context       Json?     // Contesto conversazione (stato ordine, etc.)
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  messages      WhatsAppMessage[]
+
+  @@index([phoneNumber])
+  @@map("whatsapp_conversations")
+}
+
+enum ConversationStatus {
+  ACTIVE        // Attiva
+  WAITING_INFO  // In attesa info cliente
+  WAITING_ORDER // In attesa dettagli ordine
+  CONFIRMING    // In conferma ordine
+  COMPLETED     // Completata
+  CLOSED        // Chiusa
+}
+
+model WhatsAppMessage {
+  id              String    @id @default(uuid())
+  conversationId  String
+  messageId       String    @unique // ID messaggio WhatsApp
+  direction       MessageDirection
+  type            MessageType @default(TEXT)
+  content         String?
+  mediaUrl        String?
+  status          MessageStatus @default(SENT)
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+
+  conversation    WhatsAppConversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId])
+  @@map("whatsapp_messages")
+}
+
+enum MessageDirection {
+  INBOUND   // Dal cliente
+  OUTBOUND  // Al cliente
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  DOCUMENT
+  AUDIO
+  VIDEO
+  LOCATION
+  TEMPLATE
+  INTERACTIVE
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+// ==================== NOTIFICHE ====================
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String
+  type        NotificationType
+  title       String
+  message     String
+  data        Json?
+  isRead      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  LOW_STOCK       // Stock basso
+  NEW_ORDER       // Nuovo ordine
+  ORDER_STATUS    // Cambio stato ordine
+  PAYMENT         // Pagamento ricevuto
+  DELIVERY        // Consegna
+  SYSTEM          // Sistema
+}
+
+// ==================== CONFIGURAZIONI ====================
+
+model Setting {
+  id        String    @id @default(uuid())
+  key       String    @unique
+  value     Json
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("settings")
+}
+
+// ==================== AUDIT LOG ====================
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  userId      String?
+  action      String
+  entity      String
+  entityId    String?
+  oldData     Json?
+  newData     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

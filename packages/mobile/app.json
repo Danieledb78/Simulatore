@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Beverage Warehouse",
+    "slug": "beverage-warehouse",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0ea5e9"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.beveragewarehouse.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "L'app usa la fotocamera per scansionare i codici a barre",
+        "NSLocationWhenInUseUsageDescription": "L'app usa la posizione per le consegne"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0ea5e9"
+      },
+      "package": "com.beveragewarehouse.app",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permetti l'accesso alla fotocamera per scansionare i codici a barre"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permetti l'accesso alla posizione per le consegne"
+        }
+      ]
+    ]
+  }
+}

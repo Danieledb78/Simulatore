@@ -1,0 +1,22 @@
+run = "npm run start"
+entrypoint = "packages/backend/src/index.ts"
+
+[nix]
+channel = "stable-23_11"
+
+[env]
+DATABASE_URL = "file:./dev.db"
+JWT_SECRET = "super-secret-jwt-key-change-in-production"
+PORT = "3000"
+NODE_ENV = "development"
+
+[deployment]
+run = ["sh", "-c", "npm run start"]
+
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[[ports]]
+localPort = 5173
+externalPort = 3000

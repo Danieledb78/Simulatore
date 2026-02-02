@@ -1,0 +1,508 @@
+// Schema database per Gestione Magazzino Bevande - VERSIONE SQLITE (per Replit/Test)
+// Per usare questo schema: copia questo file come schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== UTENTI E AUTENTICAZIONE ====================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  phone         String?
+  role          String    @default("ADMIN")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  driver        Driver?
+  notifications Notification[]
+
+  @@map("users")
+}
+
+// ==================== PRODOTTI E MAGAZZINO ====================
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  imageUrl    String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id              String    @id @default(uuid())
+  barcode         String    @unique
+  name            String
+  description     String?
+  categoryId      String
+  brand           String?
+  unit            String    @default("PIECE")
+  unitSize        String?
+  purchasePrice   Float
+  sellingPrice    Float
+  vatRate         Float     @default(22.00)
+  minStockLevel   Int       @default(10)
+  imageUrl        String?
+  isActive        Boolean   @default(true)
+  expirationDays  Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  category        Category  @relation(fields: [categoryId], references: [id])
+  stockMovements  StockMovement[]
+  orderItems      OrderItem[]
+  priceListItems  PriceListItem[]
+  inventory       Inventory?
+
+  @@index([barcode])
+  @@index([categoryId])
+  @@map("products")
+}
+
+model Inventory {
+  id              String    @id @default(uuid())
+  productId       String    @unique
+  quantity        Int       @default(0)
+  reservedQty     Int       @default(0)
+  availableQty    Int       @default(0)
+  lastRestockDate DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  product         Product   @relation(fields: [productId], references: [id])
+
+  @@map("inventory")
+}
+
+model StockMovement {
+  id            String          @id @default(uuid())
+  productId     String
+  type          String
+  quantity      Int
+  previousQty   Int
+  newQty        Int
+  batchNumber   String?
+  expirationDate DateTime?
+  notes         String?
+  supplierId    String?
+  orderId       String?
+  createdBy     String
+  createdAt     DateTime        @default(now())
+
+  product       Product         @relation(fields: [productId], references: [id])
+  supplier      Supplier?       @relation(fields: [supplierId], references: [id])
+  order         Order?          @relation(fields: [orderId], references: [id])
+
+  @@index([productId])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+model Supplier {
+  id            String    @id @default(uuid())
+  name          String
+  email         String?
+  phone         String?
+  address       String?
+  city          String?
+  province      String?
+  postalCode    String?
+  vatNumber     String?
+  notes         String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  stockMovements StockMovement[]
+
+  @@map("suppliers")
+}
+
+// ==================== CLIENTI ====================
+
+model Customer {
+  id              String    @id @default(uuid())
+  type            String    @default("PRIVATE")
+  companyName     String?
+  firstName       String
+  lastName        String
+  email           String?   @unique
+  phone           String    @unique
+  whatsappId      String?   @unique
+  address         String?
+  city            String?
+  province        String?
+  postalCode      String?
+  zoneId          String?
+  vatNumber       String?
+  fiscalCode      String?
+  sdiCode         String?
+  pecEmail        String?
+  priceListId     String?
+  creditLimit     Float?
+  currentBalance  Float     @default(0)
+  paymentTerms    String    @default("IMMEDIATE")
+  notes           String?
+  isActive        Boolean   @default(true)
+  isVerified      Boolean   @default(false)
+  stripeCustomerId String?  @unique
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  zone            Zone?     @relation(fields: [zoneId], references: [id])
+  priceList       PriceList? @relation(fields: [priceListId], references: [id])
+  orders          Order[]
+  payments        Payment[]
+  invoices        Invoice[]
+  conversations   WhatsAppConversation[]
+
+  @@index([phone])
+  @@index([whatsappId])
+  @@index([zoneId])
+  @@map("customers")
+}
+
+// ==================== LISTINI PREZZI ====================
+
+model PriceList {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  discountPct Float?
+  isDefault   Boolean   @default(false)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items       PriceListItem[]
+  customers   Customer[]
+
+  @@map("price_lists")
+}
+
+model PriceListItem {
+  id          String    @id @default(uuid())
+  priceListId String
+  productId   String
+  price       Float
+  discountPct Float?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  priceList   PriceList @relation(fields: [priceListId], references: [id])
+  product     Product   @relation(fields: [productId], references: [id])
+
+  @@unique([priceListId, productId])
+  @@map("price_list_items")
+}
+
+// ==================== ORDINI ====================
+
+model Order {
+  id              String      @id @default(uuid())
+  orderNumber     String      @unique
+  customerId      String
+  driverId        String?
+  status          String      @default("PENDING")
+  source          String      @default("WEB")
+
+  deliveryAddress String
+  deliveryCity    String
+  deliveryProvince String?
+  deliveryPostalCode String?
+  deliveryNotes   String?
+
+  subtotal        Float
+  vatAmount       Float
+  deliveryFee     Float       @default(0)
+  discount        Float       @default(0)
+  total           Float
+
+  requestedDate   DateTime?
+  scheduledDate   DateTime?
+  deliveredAt     DateTime?
+
+  paymentStatus   String      @default("PENDING")
+  paymentMethod   String?
+  paidAmount      Float       @default(0)
+
+  notes           String?
+  internalNotes   String?
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  customer        Customer    @relation(fields: [customerId], references: [id])
+  driver          Driver?     @relation(fields: [driverId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  invoice         Invoice?
+  stockMovements  StockMovement[]
+  statusHistory   OrderStatusHistory[]
+
+  @@index([customerId])
+  @@index([driverId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String    @id @default(uuid())
+  orderId     String
+  productId   String
+  quantity    Int
+  unitPrice   Float
+  vatRate     Float
+  discount    Float     @default(0)
+  total       Float
+
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(uuid())
+  orderId   String
+  status    String
+  notes     String?
+  changedBy String?
+  createdAt DateTime    @default(now())
+
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+// ==================== DRIVER E ZONE ====================
+
+model Zone {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  postalCodes String    @default("[]")
+  cities      String    @default("[]")
+  provinces   String    @default("[]")
+  deliveryFee Float     @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  drivers     Driver[]
+  customers   Customer[]
+
+  @@map("zones")
+}
+
+model Driver {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  zoneId        String?
+  vehicleType   String?
+  vehiclePlate  String?
+  licenseNumber String?
+  isAvailable   Boolean   @default(true)
+  currentLat    Float?
+  currentLng    Float?
+  lastLocationAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id])
+  zone          Zone?     @relation(fields: [zoneId], references: [id])
+  orders        Order[]
+  deliveries    Delivery[]
+
+  @@map("drivers")
+}
+
+model Delivery {
+  id              String    @id @default(uuid())
+  driverId        String
+  date            DateTime
+  status          String    @default("PENDING")
+  startedAt       DateTime?
+  completedAt     DateTime?
+  totalOrders     Int       @default(0)
+  completedOrders Int       @default(0)
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  driver          Driver    @relation(fields: [driverId], references: [id])
+
+  @@unique([driverId, date])
+  @@map("deliveries")
+}
+
+// ==================== PAGAMENTI E FATTURAZIONE ====================
+
+model Payment {
+  id              String        @id @default(uuid())
+  orderId         String
+  customerId      String
+  amount          Float
+  method          String
+  status          String        @default("PENDING")
+  stripePaymentId String?       @unique
+  stripeReceiptUrl String?
+  transactionRef  String?
+  notes           String?
+  paidAt          DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  order           Order         @relation(fields: [orderId], references: [id])
+  customer        Customer      @relation(fields: [customerId], references: [id])
+
+  @@index([orderId])
+  @@index([customerId])
+  @@map("payments")
+}
+
+model Invoice {
+  id              String        @id @default(uuid())
+  invoiceNumber   String        @unique
+  orderId         String        @unique
+  customerId      String
+  type            String        @default("INVOICE")
+
+  customerName    String
+  customerAddress String
+  customerVat     String?
+  customerFiscalCode String?
+  customerSdi     String?
+  customerPec     String?
+
+  subtotal        Float
+  vatAmount       Float
+  total           Float
+
+  status          String        @default("DRAFT")
+  sdiStatus       String?
+  sdiId           String?
+
+  pdfUrl          String?
+  xmlUrl          String?
+
+  issuedAt        DateTime?
+  sentAt          DateTime?
+  sentVia         String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  order           Order         @relation(fields: [orderId], references: [id])
+  customer        Customer      @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@map("invoices")
+}
+
+// ==================== WHATSAPP ====================
+
+model WhatsAppConversation {
+  id            String    @id @default(uuid())
+  customerId    String?
+  phoneNumber   String
+  whatsappId    String    @unique
+  status        String    @default("ACTIVE")
+  context       String?
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  messages      WhatsAppMessage[]
+
+  @@index([phoneNumber])
+  @@map("whatsapp_conversations")
+}
+
+model WhatsAppMessage {
+  id              String    @id @default(uuid())
+  conversationId  String
+  messageId       String    @unique
+  direction       String
+  type            String    @default("TEXT")
+  content         String?
+  mediaUrl        String?
+  status          String    @default("SENT")
+  metadata        String?
+  createdAt       DateTime  @default(now())
+
+  conversation    WhatsAppConversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId])
+  @@map("whatsapp_messages")
+}
+
+// ==================== NOTIFICHE ====================
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String
+  type        String
+  title       String
+  message     String
+  data        String?
+  isRead      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ==================== CONFIGURAZIONI ====================
+
+model Setting {
+  id        String    @id @default(uuid())
+  key       String    @unique
+  value     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("settings")
+}
+
+// ==================== AUDIT LOG ====================
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  oduserId      String?
+  action      String
+  entity      String
+  entityId    String?
+  oldData     String?
+  newData     String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
